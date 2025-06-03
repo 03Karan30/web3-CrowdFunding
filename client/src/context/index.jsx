@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 const StateContext = createContext();
 
 // Contract address from environment or fallback
-const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '0x6546b44982528Bec1A4F1e25F3896c419fDcaB57';
+const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
 
 // Validate contract address
 if (!ethers.utils.isAddress(CONTRACT_ADDRESS)) {
