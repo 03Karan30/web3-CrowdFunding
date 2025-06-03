@@ -263,7 +263,7 @@ export const StateContextProvider = ({ children }) => {
       
       return data;
     } catch (error) {
-      console.error("Donation failed:", error);
+      console.error("Donation fail:", error);
       handleContractError(error, "Donation");
     }
   };
