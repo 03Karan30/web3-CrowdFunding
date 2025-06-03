@@ -9,7 +9,7 @@ const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '0x6546b449825
 
 // Validate contract address
 if (!ethers.utils.isAddress(CONTRACT_ADDRESS)) {
-  console.error('Invalid contract address:', CONTRACT_ADDRESS);
+  console.error('Invalid contract addres:', CONTRACT_ADDRESS);
 }
 
 export const StateContextProvider = ({ children }) => {
