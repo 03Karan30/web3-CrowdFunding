@@ -26,7 +26,7 @@ contract CrowdFunding {
                                     string memory _image) public returns (uint256) {                                        
         Campaign storage campaign = campaigns[numberOfCampaigns];
 
-        require(campaign.deadline < block.timestamp, "The deadline should be a date in the future.");
+        require(_deadline > block.timestamp, "The deadline should be a date in the future.");
 
         campaign.owner = _owner;
         campaign.title = _title;
@@ -39,6 +39,22 @@ contract CrowdFunding {
         numberOfCampaigns++;
         
         return numberOfCampaigns - 1;
+    }
+
+    // Function to delete a campaign by owner
+    function deleteCampaign(uint256 _id) public {
+        Campaign storage campaign = campaigns[_id];
+        require(msg.sender == campaign.owner, "Only the owner can delete this campaign.");
+        require(_id < numberOfCampaigns, "Invalid campaign ID.");
+
+        // Delete the campaign by resetting its data
+        delete campaigns[_id];
+
+        // Optional: Shift campaigns to fill the gap or mark as deleted
+        // For simplicity, just decrement numberOfCampaigns if last campaign is deleted
+        if (_id == numberOfCampaigns - 1) {
+            numberOfCampaigns--;
+        }
     }
 
 

@@ -9,11 +9,11 @@ import { thirdweb } from '../assets';
 
 const CampaignDetails = () => {
   const { state } = useLocation();
-  const { id } = useParams(); // Get campaign ID from URL
+  const { id } = useParams();
   const navigate = useNavigate();
   const { donate, getDonations, contract, address, getCampaigns } = useStateContext();
 
-  const [isLoading, setIsLoading] = useState(false); // This should only be for donation loading
+  const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
   const [donators, setDonators] = useState([]);
   const [error, setError] = useState('');
@@ -26,7 +26,31 @@ const CampaignDetails = () => {
   // Use state from navigation or fetch from contract
   const campaignData = state || campaign;
 
-  // Fetch campaign data if not available from state (e.g., after refresh)
+  // Function to get campaign by specific ID
+  const getCampaignById = async (campaignId) => {
+    if (!contract) return null;
+    
+    try {
+      const campaigns = await contract.call("getCampaigns");
+      const parsedCampaigns = campaigns.map((campaign, i) => ({
+        owner: campaign.owner,
+        title: campaign.title,
+        description: campaign.description,
+        target: ethers.utils.formatEther(campaign.target.toString()),
+        deadline: campaign.deadline.toNumber(),
+        amountCollected: ethers.utils.formatEther(campaign.amountCollected.toString()),
+        image: campaign.image,
+        pId: i
+      }));
+      
+      return parsedCampaigns.find(camp => camp.pId === parseInt(campaignId));
+    } catch (error) {
+      console.error('Error getting campaign by ID:', error);
+      throw error;
+    }
+  };
+
+  // Fetch campaign function
   const fetchCampaign = async () => {
     if (!contract || !id) return;
     
@@ -34,14 +58,25 @@ const CampaignDetails = () => {
       setLoadingCampaign(true);
       setError('');
       
-      // Get all campaigns and find the one with matching ID
-      const campaigns = await getCampaigns();
-      const foundCampaign = campaigns.find(camp => camp.pId === parseInt(id));
+      const foundCampaign = await getCampaignById(id);
       
       if (foundCampaign) {
         setCampaign(foundCampaign);
       } else {
-        setError('Campaign not found');
+        // Fallback: try getting all campaigns
+        try {
+          const campaigns = await getCampaigns();
+          const fallbackCampaign = campaigns.find(camp => camp.pId === parseInt(id));
+          
+          if (fallbackCampaign) {
+            setCampaign(fallbackCampaign);
+          } else {
+            setError('Campaign not found');
+          }
+        } catch (fallbackError) {
+          console.error('Fallback fetch failed:', fallbackError);
+          setError('Campaign not found');
+        }
       }
     } catch (err) {
       console.error('Error fetching campaign:', err);
@@ -51,40 +86,164 @@ const CampaignDetails = () => {
     }
   };
 
-  // Initialize component
-  useEffect(() => {
-    // If we don't have campaign data from navigation state, fetch it
-    if (!state && contract && id) {
-      fetchCampaign();
-    }
-  }, [contract, id, state]);
-
+  // Fetch donators function
   const fetchDonators = async () => {
-    if (!campaignData?.pId) return;
+    if (!campaignData?.pId && campaignData?.pId !== 0) return;
     
     try {
       setLoadingDonators(true);
-      setError('');
       const data = await getDonations(campaignData.pId);
       setDonators(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching donators:', err);
-      setError('Failed to load donators. Please try refreshing the page.');
       setDonators([]);
     } finally {
       setLoadingDonators(false);
     }
-  }
+  };
 
+  // Helper to parse and format campaign data
+  const parseCampaignData = (campaign) => {
+    if (!campaign) return null;
+
+    const formatValue = (value) => {
+      if (typeof value === 'string' && value.includes('.')) {
+        // Already formatted string
+        return value;
+      }
+      try {
+        return ethers.utils.formatEther(value.toString());
+      } catch {
+        return '0.0';
+      }
+    };
+
+    return {
+      ...campaign,
+      target: formatValue(campaign.target),
+      amountCollected: formatValue(campaign.amountCollected),
+      deadline: typeof campaign.deadline === 'object' && campaign.deadline.toNumber ? campaign.deadline.toNumber() : campaign.deadline,
+    };
+  };
+
+  // Initialize component
   useEffect(() => {
-    // Fetch donators when we have campaign data
-    if (campaignData?.pId && contract) {
+    if (contract && id) {
+      // If we have state data, parse and format it before setting, then still fetch fresh data
+      if (state) {
+        setCampaign(parseCampaignData(state));
+      }
+      fetchCampaign();
+    }
+  }, [contract, id, state]); // Added state to dependencies
+
+  // Fetch donators when campaign data is available
+  useEffect(() => {
+    if ((campaignData?.pId !== undefined || campaignData?.pId === 0) && contract) {
       fetchDonators();
     }
-  }, [contract, campaignData?.pId])
+  }, [contract, campaignData?.pId]);
 
-  // Show loading only when fetching campaign data (not for donations)
-  if (loadingCampaign) {
+  // Format ETH values for display
+  const formatEthValue = (value) => {
+    try {
+      if (!value) return '0.0000';
+      if (typeof value === 'string' && value.includes('.')) {
+        // Already formatted
+        return parseFloat(value).toFixed(4);
+      }
+      return parseFloat(ethers.utils.formatEther(value || '0')).toFixed(4);
+    } catch {
+      return '0.0000';
+    }
+  };
+
+  // Validation functions
+  const validateAmount = (value) => {
+    if (!value || value === '') return 'Please enter an amount';
+    const numValue = parseFloat(value);
+    if (isNaN(numValue) || numValue <= 0) return 'Please enter a valid positive number';
+    if (numValue < 0.001) return 'Minimum donation is 0.001 ETH';
+    return '';
+  };
+
+  // Handle donation
+  const handleDonate = async () => {
+    try {
+      // Clear previous errors
+      setDonateError('');
+      setSuccess('');
+
+      // Validate amount
+      const amountError = validateAmount(amount);
+      if (amountError) {
+        setDonateError(amountError);
+        return;
+      }
+
+      // Check if campaign is expired
+      const remainingDays = daysLeft(campaignData.deadline);
+      if (remainingDays <= 0) {
+        setDonateError('This campaign has expired and no longer accepts donations.');
+        return;
+      }
+
+      // Check if user is connected
+      if (!address) {
+        setDonateError('Please connect your wallet to donate.');
+        return;
+      }
+
+      // Check if user is trying to donate to their own campaign
+      if (address.toLowerCase() === campaignData.owner.toLowerCase()) {
+        setDonateError('You cannot donate to your own campaign.');
+        return;
+      }
+
+      setIsLoading(true);
+      await donate(campaignData.pId, amount);
+      
+      setSuccess(`Successfully donated ${amount} ETH! Thank you for your support.`);
+      setAmount('');
+      
+      // Refresh donators list and campaign data
+      await Promise.all([fetchDonators(), fetchCampaign()]);
+      
+      // Navigate after a short delay to show success message
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+      
+    } catch (err) {
+      console.error('Donation error:', err);
+      
+      // Handle specific error types
+      if (err.code === 4001) {
+        setDonateError('Transaction was cancelled by user.');
+      } else if (err.code === -32603) {
+        setDonateError('Transaction failed. You may not have enough ETH for gas fees.');
+      } else if (err.message?.includes('insufficient funds')) {
+        setDonateError('Insufficient funds for this donation and gas fees.');
+      } else {
+        setDonateError(err.message || 'Donation failed. Please try again or check your wallet connection.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAmountChange = (e) => {
+    const value = e.target.value;
+    setAmount(value);
+    
+    // Clear errors when user starts typing
+    if (donateError) {
+      setDonateError('');
+    }
+  };
+
+  // Show loading only when fetching campaign data
+  if (loadingCampaign && !campaignData) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader />
@@ -93,15 +252,15 @@ const CampaignDetails = () => {
   }
 
   // Show error state
-  if (!campaignData || error) {
+  if (!campaignData && error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <div className="text-center">
           <h2 className="font-epilogue font-bold text-[24px] text-white mb-4">
-            {error || "Campaign Not Found"}
+            {error}
           </h2>
           <p className="font-epilogue text-[16px] text-[#808191] mb-6">
-            {error || "The campaign you're looking for doesn't exist or has been removed."}
+            The campaign you're looking for doesn't exist or couldn't be loaded.
           </p>
           <div className="flex gap-4 justify-center">
             <CustomButton 
@@ -125,98 +284,21 @@ const CampaignDetails = () => {
     );
   }
 
+  // If we still don't have campaign data and we're not loading, show a minimal loading state
+  if (!campaignData) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#8c6dfd] mx-auto mb-4"></div>
+          <p className="text-[#808191]">Loading campaign details...</p>
+        </div>
+      </div>
+    );
+  }
+
   const remainingDays = daysLeft(campaignData.deadline);
   const isExpired = remainingDays <= 0;
   const progressPercentage = calculateBarPercentage(campaignData.target, campaignData.amountCollected);
-
-  const validateAmount = (value) => {
-    if (!value || value === '') return 'Please enter an amount';
-    if (isNaN(value) || parseFloat(value) <= 0) return 'Please enter a valid positive number';
-    if (parseFloat(value) < 0.001) return 'Minimum donation is 0.001 ETH';
-    return '';
-  };
-
-  const handleDonate = async () => {
-    try {
-      // Clear previous errors
-      setDonateError('');
-      setSuccess('');
-
-      // Validate amount
-      const amountError = validateAmount(amount);
-      if (amountError) {
-        setDonateError(amountError);
-        return;
-      }
-
-      // Check if campaign is expired
-      if (isExpired) {
-        setDonateError('This campaign has expired and no longer accepts donations.');
-        return;
-      }
-
-      // Check if user is connected
-      if (!address) {
-        setDonateError('Please connect your wallet to donate.');
-        return;
-      }
-
-      // Check if user is trying to donate to their own campaign
-      if (address.toLowerCase() === campaignData.owner.toLowerCase()) {
-        setDonateError('You cannot donate to your own campaign.');
-        return;
-      }
-
-      setIsLoading(true);
-      await donate(campaignData.pId, amount);
-      
-      setSuccess(`Successfully donated ${amount} ETH! Thank you for your support.`);
-      setAmount('');
-      
-      // Refresh donators list
-      await fetchDonators();
-      
-      // Navigate after a short delay to show success message
-      setTimeout(() => {
-        navigate('/');
-      }, 2000);
-      
-    } catch (err) {
-      console.error('Donation error:', err);
-      
-      // Handle specific error types
-      if (err.code === 4001) {
-        setDonateError('Transaction was cancelled by user.');
-      } else if (err.code === -32603) {
-        setDonateError('Transaction failed. You may not have enough ETH for gas fees.');
-      } else if (err.message?.includes('insufficient funds')) {
-        setDonateError('Insufficient funds for this donation and gas fees.');
-      } else {
-        setDonateError('Donation failed. Please try again or check your wallet connection.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  const handleAmountChange = (e) => {
-    const value = e.target.value;
-    setAmount(value);
-    
-    // Clear errors when user starts typing
-    if (donateError) {
-      setDonateError('');
-    }
-  };
-
-  // Format ETH values for display
-  const formatEthValue = (value) => {
-    try {
-      return ethers.utils.formatEther(value || '0');
-    } catch {
-      return '0';
-    }
-  };
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -261,7 +343,7 @@ const CampaignDetails = () => {
               alt="campaign" 
               className="w-full h-[410px] object-cover rounded-xl"
               onError={(e) => {
-                e.target.src = '/placeholder-image.jpg'; // fallback image
+                e.target.src = 'https://via.placeholder.com/800x410?text=Campaign+Image';
               }}
             />
             {isExpired && (

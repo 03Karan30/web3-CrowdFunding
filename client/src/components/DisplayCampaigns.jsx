@@ -131,7 +131,7 @@ const DisplayCampaigns = ({ title, isLoading, campaigns }) => {
             </div>
             <div>
               <p className="font-epilogue font-bold text-2xl text-[#1dc071]">
-                ${campaigns.reduce((sum, c) => sum + (c.amountCollected || 0), 0).toLocaleString()}
+                ${campaigns.reduce((sum, c) => sum + Number(c.amountCollected || 0), 0).toLocaleString()}
               </p>
               <p className="font-epilogue font-medium text-[#818183] text-sm mt-1">
                 Total Raised
