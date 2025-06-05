@@ -346,7 +346,7 @@ const CreateCampaign = () => {
 
       <div className="flex justify-center items-center p-[16px] sm:min-w-[380px] bg-[#3a3a43] rounded-[10px]">
         <h1 className="font-epilogue font-bold sm:text-[25px] text-[18px] leading-[38px] text-white">
-          Start a Campaign
+          Start a Campaign 🚀
         </h1>
       </div>
 

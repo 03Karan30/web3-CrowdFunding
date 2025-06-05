@@ -15,6 +15,7 @@ if (!ethers.utils.isAddress(CONTRACT_ADDRESS)) {
 export const StateContextProvider = ({ children }) => {
   const { contract, isLoading: contractLoading, error: contractError } = useContract(CONTRACT_ADDRESS);
   const { mutateAsync: createCampaignContract } = useContractWrite(contract, 'createCampaign');
+  const { mutateAsync: deleteCampaignContract } = useContractWrite(contract, 'deleteCampaign');
   const address = useAddress();
   const connect = useConnect();
   
@@ -204,6 +205,47 @@ export const StateContextProvider = ({ children }) => {
     }
   };
 
+  // NEW: Delete campaign function
+  const deleteCampaign = async (campaignId) => {
+    try {
+      console.log("deleteCampaign called with ID:", campaignId);
+      console.log("Current address:", address);
+      
+      // Pre-flight checks
+      if (!address) {
+        throw new Error("Wallet not connected. Please connect your wallet first.");
+      }
+
+      if (contractLoading) {
+        throw new Error("Contract is still loading. Please wait a moment and try again.");
+      }
+
+      if (contractError) {
+        throw new Error(`Contract error: ${contractError.message}`);
+      }
+
+      if (!contract) {
+        throw new Error("Contract not initialized. Please check your network and contract address.");
+      }
+
+      if (campaignId === undefined || campaignId === null || campaignId < 0) {
+        throw new Error("Invalid campaign ID");
+      }
+
+      console.log("Calling deleteCampaign contract function with ID:", campaignId);
+
+      const data = await deleteCampaignContract({
+        args: [campaignId],
+      });
+      
+      console.log("Campaign deletion successful:", data);
+      return data;
+    } catch (error) {
+      console.error("Campaign deletion failed:", error);
+      handleContractError(error, "Campaign deletion");
+    }
+  };
+
   // Enhanced campaign retrieval
   const getCampaigns = async () => {
     try {
@@ -220,6 +262,7 @@ export const StateContextProvider = ({ children }) => {
         deadline: campaign.deadline.toNumber(),
         amountCollected: ethers.utils.formatEther(campaign.amountCollected.toString()),
         image: campaign.image,
+        isActive: campaign.isActive,
         pId: i
       }));
       
@@ -244,6 +287,37 @@ export const StateContextProvider = ({ children }) => {
     } catch (error) {
       console.error("Failed to get user campaigns:", error);
       handleContractError(error, "Get user campaigns");
+    }
+  };
+
+  // NEW: Get specific campaign by ID
+  const getCampaign = async (campaignId) => {
+    try {
+      if (!contract) {
+        throw new Error("Contract not initialized");
+      }
+
+      if (campaignId === undefined || campaignId === null || campaignId < 0) {
+        throw new Error("Invalid campaign ID");
+      }
+
+      const campaign = await contract.call('getCampaign', [campaignId]);
+      const parsedCampaign = {
+        owner: campaign.owner,
+        title: campaign.title,
+        description: campaign.description,
+        target: ethers.utils.formatEther(campaign.target.toString()),
+        deadline: campaign.deadline.toNumber(),
+        amountCollected: ethers.utils.formatEther(campaign.amountCollected.toString()),
+        image: campaign.image,
+        isActive: campaign.isActive,
+        pId: campaignId
+      };
+      
+      return parsedCampaign;
+    } catch (error) {
+      console.error("Failed to get campaign:", error);
+      handleContractError(error, "Get campaign");
     }
   };
 
@@ -304,7 +378,9 @@ export const StateContextProvider = ({ children }) => {
         connectWallet,
         switchToSepolia,
         createCampaign,
+        deleteCampaign,
         getCampaigns,
+        getCampaign,
         getUserCampaigns,
         donate,
         getDonations,
