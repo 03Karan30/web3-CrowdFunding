@@ -2,8 +2,6 @@
 
 <div align="center">
 
-![Crowdfunding Banner] (E:\Crowd Funding - 3\client\src\assets\CF.png)
-
 **A next-generation decentralized crowdfunding platform built on blockchain technology**
 
 [![React](https://img.shields.io/badge/React-18.0+-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
