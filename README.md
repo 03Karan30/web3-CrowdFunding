@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Crowdfunding Banner](https://via.placeholder.com/800x200/4F46E5/FFFFFF?text=Decentralized+Crowdfunding+Platform)
+![Crowdfunding Banner] (E:\Crowd Funding - 3\client\src\assets\CF.png)
 
 **A next-generation decentralized crowdfunding platform built on blockchain technology**
 
