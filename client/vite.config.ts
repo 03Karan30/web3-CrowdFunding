@@ -16,4 +16,5 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  base: process.env.VITE_BASE_PATH || '/web3-CrowdFunding',
 });
