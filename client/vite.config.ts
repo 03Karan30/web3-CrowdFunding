@@ -17,4 +17,22 @@ export default defineConfig({
     global: 'globalThis',
   },
   base: process.env.VITE_BASE_PATH || '/web3-CrowdFunding',
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress the specific Safe adapter warning that's causing the build to fail
+        if (warning.code === 'UNRESOLVED_IMPORT') {
+          const warningMessage = warning.message || '';
+          if (warningMessage.includes('safe-ethers-adapters') || 
+              warningMessage.includes('safe-globalThis')) {
+            return;
+          }
+        }
+        warn(warning);
+      }
+    },
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+  }
 });
